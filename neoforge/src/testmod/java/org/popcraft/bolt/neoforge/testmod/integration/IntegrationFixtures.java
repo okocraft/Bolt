@@ -148,6 +148,18 @@ public final class IntegrationFixtures {
                 active.phase = 2;
                 active.phaseTicks = 0;
             } else if (active.phase == 2 && selected == null && active.phaseTicks >= 2) {
+                BlockProtection retained = active.runtime.protections().create(
+                        level, CLAIM, OWNER, active.type);
+                active.runtime.protections().save(retained);
+                active.retainedLockId = retained.getId();
+                command(active.owner, "purgeregion " + REGION_ID
+                        + " block:chest owner:" + OWNER + " type:" + active.type);
+                active.manager.removeRegion(REGION_ID);
+                active.phase = 3;
+                active.phaseTicks = 0;
+            } else if (active.phase == 3 && active.phaseTicks >= 8) {
+                if (selected == null || !active.retainedLockId.equals(selected.getId()))
+                    throw new AssertionError("Queued purge removed a lock after its region was deleted");
                 cleanup(active.runtime, level, active.manager, active.before,
                         active.adminUser, active.adminNode);
                 session = null;
@@ -264,6 +276,7 @@ public final class IntegrationFixtures {
         final PermissionNode adminNode;
         int phase;
         int phaseTicks;
+        UUID retainedLockId;
 
         Session(BoltRuntime runtime, ServerLevel level, RegionManager manager,
                 Map<BlockPos, BlockState> before, FakePlayer owner, String type,

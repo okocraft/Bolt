@@ -1,6 +1,11 @@
 package org.popcraft.bolt.neoforge.integration;
 
+import com.sk89q.worldedit.math.BlockVector2;
+import com.sk89q.worldedit.math.BlockVector3;
+import com.sk89q.worldguard.WorldGuard;
+import com.sk89q.worldguard.protection.managers.RegionManager;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
+import de.kuro.worldguard.api.WorldGuardNeoForge;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
@@ -8,6 +13,7 @@ import org.popcraft.bolt.neoforge.BoltRuntime;
 import org.popcraft.bolt.protection.BlockProtection;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.UUID;
 
 /** A bounded cursor over a WorldGuard region or Bolt's cached protections. */
@@ -17,6 +23,9 @@ final class RegionJob {
     private final UUID actor;
     private final String name;
     private final ProtectedRegion region;
+    private final BlockVector3 initialMin;
+    private final BlockVector3 initialMax;
+    private final List<BlockVector2> initialPoints;
     private final RegionCommands.RegionFilters filters;
     private final boolean purge;
     private final Iterator<BlockProtection> protections;
@@ -31,6 +40,7 @@ final class RegionJob {
     private long z;
     private int changed;
     private boolean finished;
+    private boolean stoppedForRegionChange;
 
     RegionJob(BoltRuntime runtime, ServerLevel level, UUID actor, String name,
               ProtectedRegion region, RegionCommands.RegionFilters filters, boolean purge) {
@@ -44,6 +54,9 @@ final class RegionJob {
         protections = purge ? runtime.protections().blocks().iterator() : null;
         var min = region.getMinimumPoint();
         var max = region.getMaximumPoint();
+        initialMin = min;
+        initialMax = max;
+        initialPoints = List.copyOf(region.getPoints());
         minX = min.x();
         maxX = max.x();
         minY = Math.max(min.y(), level.getMinY());
@@ -60,6 +73,10 @@ final class RegionJob {
     UUID actor() { return actor; }
 
     boolean advance(int budget) {
+        if (!finished && !sameRegion()) {
+            stoppedForRegionChange = true;
+            finished = true;
+        }
         boolean loadedChunk = false;
         long deadline = System.nanoTime() + 4_000_000L;
         boolean processed = false;
@@ -82,6 +99,15 @@ final class RegionJob {
             processed = true;
         }
         return finished;
+    }
+
+    private boolean sameRegion() {
+        RegionManager manager = WorldGuard.getInstance().getPlatform().getRegionContainer()
+                .get(WorldGuardNeoForge.world(level));
+        return manager != null && manager.getRegion(name) == region
+                && initialMin.equals(region.getMinimumPoint())
+                && initialMax.equals(region.getMaximumPoint())
+                && initialPoints.equals(region.getPoints());
     }
 
     private void protect(BlockPos pos) {
@@ -117,6 +143,8 @@ final class RegionJob {
     }
 
     String summary() {
+        if (stoppedForRegionChange)
+            return "Stopped region job for " + name + " after " + changed + " blocks because the region changed.";
         return (purge ? "Purged " : "Protected ") + changed + " blocks in region " + name + ".";
     }
 }

@@ -32,10 +32,6 @@ public final class ProtectionMenus {
     private static final Map<AbstractContainerMenu, BlockPos> MENU_ORIGINS = new WeakHashMap<>();
     private ProtectionMenus() { }
 
-    public static boolean mayOpen(BoltRuntime runtime, ServerPlayer player, AbstractContainerMenu menu) {
-        return mayOpen(runtime, player, menu, null);
-    }
-
     public static boolean mayOpen(BoltRuntime runtime, ServerPlayer player, AbstractContainerMenu menu,
                                   MenuProvider provider) {
         BlockPos origin = null;

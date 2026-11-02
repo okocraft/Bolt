@@ -144,7 +144,7 @@ final class ProtectionCommands {
             if (canonical != null) state.getModifications().put(Source.of(sourceName, canonical), accessName);
         }
         if (state.getModifications().isEmpty()) return 0;
-        state.setAction(new Action(Action.Type.EDIT, "bolt.command.edit", Boolean.toString(args.getFirst().equalsIgnoreCase("add"))));
+        state.setAction(new Action(Action.Type.EDIT, "bolt.command.modify", Boolean.toString(args.getFirst().equalsIgnoreCase("add"))));
         CommandSupport.promptClick(runtime, player);
         return 1;
     }

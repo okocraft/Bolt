@@ -32,6 +32,9 @@ import net.neoforged.neoforge.common.util.BlockSnapshot;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.entity.player.AttackEntityEvent;
 import net.neoforged.neoforge.event.entity.EntityInvulnerabilityCheckEvent;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
+import net.neoforged.bus.api.EventPriority;
+import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.level.block.BreakBlockEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.fml.ModList;
@@ -93,8 +96,8 @@ public final class ProtectionBehaviorTests {
             Container chest = (Container) level.getBlockEntity(FIRST);
             chest.setItem(0, new ItemStack(Items.DIAMOND));
             ChestMenu menu = ChestMenu.threeRows(1, owner.getInventory(), chest);
-            expect("outsider menu open", ProtectionMenus.mayOpen(runtime, outsider, menu), false);
-            expect("owner menu open", ProtectionMenus.mayOpen(runtime, owner, menu), true);
+            expect("outsider menu open", ProtectionMenus.mayOpen(runtime, outsider, menu, (MenuProvider) chest), false);
+            expect("owner menu open", ProtectionMenus.mayOpen(runtime, owner, menu, (MenuProvider) chest), true);
             expect("outsider withdrawal", ProtectionMenus.mayClick(runtime, outsider, menu,
                     0, ContainerInput.PICKUP), false);
             expect("owner withdrawal", ProtectionMenus.mayClick(runtime, owner, menu,
@@ -273,28 +276,54 @@ public final class ProtectionBehaviorTests {
             throw new AssertionError("Armor stand placement fixture contains an existing entity");
         }
         level.setBlockAndUpdate(base, Blocks.STONE.defaultBlockState());
+        ArmorStand placed = null;
+        ArmorStandJoinCapture capture = new ArmorStandJoinCapture(area);
+        NeoForge.EVENT_BUS.register(capture);
         try {
-            owner.setPos(base.getX() + 0.5, base.getY() + 1, base.getZ() + 0.5);
+            owner.setPos(base.getX() + 0.5, base.getY() + 1, base.getZ() - 2.5);
             ItemStack stack = new ItemStack(Items.ARMOR_STAND);
             owner.setItemInHand(InteractionHand.MAIN_HAND, stack);
             BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(base), Direction.UP, base, false);
-            stack.useOn(new UseOnContext(owner, InteractionHand.MAIN_HAND, hit));
-            var spawned = level.getEntitiesOfClass(ArmorStand.class, area);
-            if (spawned.size() != 1) {
-                throw new AssertionError("Armor stand item did not spawn exactly one entity");
+            var result = owner.getItemInHand(InteractionHand.MAIN_HAND)
+                    .useOn(new UseOnContext(owner, InteractionHand.MAIN_HAND, hit));
+            placed = capture.placed;
+            if (capture.count != 1 || capture.placed == null) {
+                throw new AssertionError("Armor stand item did not spawn exactly one uncanceled entity"
+                        + ": result=" + result + ", joinEvents=" + capture.count
+                        + ", canceledEvents=" + capture.canceled);
             }
-            ArmorStand placed = spawned.getFirst();
             EntityProtection protection = runtime.protections().find(placed);
             if (protection == null || !OWNER_ID.equals(protection.getOwner())) {
                 throw new AssertionError("Placed armor stand was not automatically locked to its placer");
             }
         } finally {
-            for (ArmorStand placed : level.getEntitiesOfClass(ArmorStand.class, area)) {
+            NeoForge.EVENT_BUS.unregister(capture);
+            if (placed != null) {
                 EntityProtection protection = runtime.protections().find(placed);
                 if (protection != null) runtime.protections().remove(protection);
                 placed.discard();
             }
             level.setBlockAndUpdate(base, Blocks.AIR.defaultBlockState());
+        }
+    }
+
+    public static final class ArmorStandJoinCapture {
+        private final AABB area;
+        private ArmorStand placed;
+        private int count;
+        private int canceled;
+
+        private ArmorStandJoinCapture(AABB area) { this.area = area; }
+
+        @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = true)
+        public void onJoin(EntityJoinLevelEvent event) {
+            if (event.getEntity() instanceof ArmorStand stand && area.intersects(stand.getBoundingBox())) {
+                if (event.isCanceled()) canceled++;
+                else {
+                    count++;
+                    placed = stand;
+                }
+            }
         }
     }
 

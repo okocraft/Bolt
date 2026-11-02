@@ -48,7 +48,7 @@ public final class BoltTestMod {
             try { DqmContainerFixtures.run(level); }
             catch (Throwable failure) { record("DQM containers",failure); }
             try {
-                var actor=FakePlayerFactory.get(level,new GameProfile(OWNER,"bolt_test_command"));
+                var actor=FakePlayerFactory.get(level,new GameProfile(OWNER,"bolt_test_cmd"));
                 actor.setPos(4300.5,250,4300.5);CommandContractProbe.run(server,actor,runtime);
                 System.out.println("BOLT_COMMAND_TESTS_PASSED");
             } catch (Throwable failure) { record("commands",failure); }

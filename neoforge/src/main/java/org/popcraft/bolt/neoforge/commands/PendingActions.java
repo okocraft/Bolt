@@ -25,9 +25,10 @@ public final class PendingActions {
         BoltPlayer state = runtime.bolt().getBoltPlayer(player.getUUID());
         Action action = state.getAction();
         if (action == null) return false;
-        if (!CommandSupport.has(runtime, player, action.getPermission())) {
+        if (!allowed(runtime, player, action)) {
             CommandSupport.say(player, "権限がありません。");
             state.setAction(null);
+            state.getModifications().clear();
             return true;
         }
         Protection protection = runtime.protections().find(level, pos);
@@ -43,9 +44,10 @@ public final class PendingActions {
         BoltPlayer state = runtime.bolt().getBoltPlayer(player.getUUID());
         Action action = state.getAction();
         if (action == null) return false;
-        if (!CommandSupport.has(runtime, player, action.getPermission())) {
+        if (!allowed(runtime, player, action)) {
             CommandSupport.say(player, "権限がありません。");
             state.setAction(null);
+            state.getModifications().clear();
             return true;
         }
         Protection protection = runtime.protections().find(entity);
@@ -137,6 +139,12 @@ public final class PendingActions {
         ProtectionCommands.forget(player);
         BoltRuntime runtime = BoltNeoForge.runtime();
         if (runtime != null) runtime.bolt().removeBoltPlayer(player);
+    }
+
+    private static boolean allowed(BoltRuntime runtime, ServerPlayer player, Action action) {
+        return CommandSupport.has(runtime, player, action.getPermission())
+                && (!action.getPermission().startsWith("bolt.command.admin.")
+                    || CommandSupport.has(runtime, player, "bolt.command.admin"));
     }
 
     @FunctionalInterface private interface BooleanOperation { boolean get(); }
