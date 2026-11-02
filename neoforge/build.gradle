@@ -1,0 +1,48 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.148'
+}
+version = '1.2-neoforge-26.2'
+group = 'org.popcraft.bolt'
+base.archivesName = 'Bolt'
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+repositories {
+    mavenCentral()
+    maven { url='https://maven.enginehub.org/repo/'; metadataSources { mavenPom(); artifact(); ignoreGradleMetadataRedirection() } }
+}
+neoForge {
+    version = '26.2.0.88'
+    mods { bolt { sourceSet sourceSets.main } }
+}
+dependencies {
+    implementation project(':bolt-common')
+    implementation 'com.google.code.gson:gson:2.13.2'
+    jarJar(implementation('org.yaml:snakeyaml:2.0')) { version { strictly '2.0' } }
+    jarJar(implementation('org.xerial:sqlite-jdbc:3.53.0.0')) { version { strictly '[3.53.0.0,4.0)'; prefer '3.53.0.0' } }
+    jarJar(implementation('com.mysql:mysql-connector-j:9.1.0')) { version { strictly '9.1.0' } }
+    compileOnly 'net.luckperms:api:5.5'
+    compileOnly files('../../WorldGuard-NeoForge/build/libs/worldguard-7.0.19-neoforge.jar')
+    compileOnly 'com.sk89q.worldedit:worldedit-neoforge-mc26.2:7.4.5'
+}
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8'; options.release = 25 }
+def metadata = tasks.register('generateModMetadata', ProcessResources) {
+    inputs.property 'version', project.version
+    expand version: project.version
+    from 'src/main/templates'
+    into 'build/generated/modMetadata'
+}
+sourceSets.main.resources.srcDir metadata
+neoForge.ideSyncTask metadata
+tasks.named('jar', Jar) {
+    from project(':bolt-common').sourceSets.main.output
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+sourceSets {
+    testmod { compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath; runtimeClasspath += output + compileClasspath }
+}
+tasks.register('testmodJar', Jar) {
+    from sourceSets.testmod.output
+    archiveFileName = 'bolt-test.jar'
+    destinationDirectory = layout.buildDirectory.dir('testmods')
+}
+tasks.named('check') { dependsOn tasks.named('testmodJar') }

@@ -3,10 +3,11 @@ import java.io.ByteArrayOutputStream
 plugins {
     id("java-library")
     id("maven-publish")
-    id("com.gradleup.shadow") version "8.3.11"
+    id("com.gradleup.shadow") version "9.6.1"
 }
 
 subprojects {
+    if (name == "bolt-neoforge") return@subprojects
     plugins.apply("java-library")
     plugins.apply("maven-publish")
     plugins.apply("com.gradleup.shadow")

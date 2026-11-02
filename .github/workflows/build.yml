@@ -1,9 +1,8 @@
 name: Build Bolt
-on: [ push, pull_request ]
+on:
+  pull_request:
 jobs:
   build:
-    # Only run on PRs if the source branch is on someone else's repo
-    if: ${{ github.event_name != 'pull_request' || github.repository != github.event.pull_request.head.repo.full_name }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -16,10 +15,10 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '25'
           cache: 'gradle'
       - name: Build
-        run: ./gradlew build
+        run: ./gradlew :bolt-bukkit:build :bolt-common:test
       - name: Upload
         uses: actions/upload-artifact@v4
         with:

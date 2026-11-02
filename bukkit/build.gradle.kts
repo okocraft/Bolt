@@ -24,10 +24,10 @@ dependencies {
 tasks {
     processResources {
         inputs.property("version", project.version)
-        val name = project.property("artifactName")
+        val name = project.property("artifactName").toString()
         val version = project.version
         val group = project.group
-        val description = project.property("description")
+        val description = project.property("description").toString()
         filesMatching("plugin.yml") {
             expand(
                 "name" to name,

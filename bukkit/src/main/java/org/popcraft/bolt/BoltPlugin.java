@@ -860,108 +860,12 @@ public class BoltPlugin extends JavaPlugin implements BoltAPI {
 
     @Override
     public boolean canAccess(final Protection protection, final SourceResolver sourceResolver, final String... permissions) {
-        if (protection == null || permissions.length == 0) {
-            return true;
-        }
-        return permissions.length == 1 ? canAccessSingle(protection, sourceResolver, permissions[0]) : canAccessMulti(protection, sourceResolver, permissions);
+        return new org.popcraft.bolt.access.AccessPolicy(bolt).allows(protection, sourceResolver, permissions);
     }
 
-    private boolean canAccessMulti(final Protection protection, final SourceResolver sourceResolver, final String... permissions) {
-        final Set<String> unresolved = new HashSet<>(Arrays.asList(permissions));
-        final Source ownerSource = Source.player(protection.getOwner());
-        if (sourceResolver.resolve(ownerSource) || sourceResolver.resolve(ADMIN_PERMISSION_SOURCE)) {
-            unresolved.removeAll(DefaultAccess.OWNER);
-            if (unresolved.isEmpty()) {
-                return true;
-            }
-        }
-        if (sourceResolver.resolve(MOD_PERMISSION_SOURCE)) {
-            unresolved.removeAll(DefaultAccess.DISPLAY);
-            if (unresolved.isEmpty()) {
-                return true;
-            }
-        }
-        final AccessRegistry accessRegistry = bolt.getAccessRegistry();
-        final Access protectionType = accessRegistry.getProtectionByType(protection.getType()).orElse(null);
-        if (protectionType != null) {
-            unresolved.removeAll(protectionType.permissions());
-            if (unresolved.isEmpty()) {
-                return true;
-            }
-        }
-        for (final Map.Entry<String, String> entry : protection.getAccess().entrySet()) {
-            if (sourceResolver.resolve(Source.parse(entry.getKey()))) {
-                final Access accessType = accessRegistry.getAccessByType(entry.getValue()).orElse(null);
-                if (accessType != null) {
-                    unresolved.removeAll(accessType.permissions());
-                    if (unresolved.isEmpty()) {
-                        return true;
-                    }
-                }
-            }
-        }
-        final AccessList accessList = bolt.getStore().loadAccessList(protection.getOwner()).join();
-        if (accessList != null) {
-            for (final Map.Entry<String, String> entry : accessList.getAccess().entrySet()) {
-                if (sourceResolver.resolve(Source.parse(entry.getKey()))) {
-                    final Access accessType = accessRegistry.getAccessByType(entry.getValue()).orElse(null);
-                    if (accessType != null) {
-                        unresolved.removeAll(accessType.permissions());
-                        if (unresolved.isEmpty()) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-        unresolved.removeIf(permission -> sourceResolver.resolve(Source.of(SourceTypes.PERMISSION, "bolt.permission." + permission)));
-        return unresolved.isEmpty();
-    }
 
-    private boolean canAccessSingle(final Protection protection, final SourceResolver sourceResolver, final String permission) {
-        final Source ownerSource = Source.player(protection.getOwner());
-        if (sourceResolver.resolve(ownerSource) || sourceResolver.resolve(ADMIN_PERMISSION_SOURCE)) {
-            if (DefaultAccess.OWNER.contains(permission)) {
-                return true;
-            }
-        }
-        if (sourceResolver.resolve(MOD_PERMISSION_SOURCE)) {
-            if (DefaultAccess.DISPLAY.contains(permission)) {
-                return true;
-            }
-        }
-        final AccessRegistry accessRegistry = bolt.getAccessRegistry();
-        final Access protectionType = accessRegistry.getProtectionByType(protection.getType()).orElse(null);
-        if (protectionType != null) {
-            if (protectionType.permissions().contains(permission)) {
-                return true;
-            }
-        }
-        for (final Map.Entry<String, String> entry : protection.getAccess().entrySet()) {
-            if (sourceResolver.resolve(Source.parse(entry.getKey()))) {
-                final Access accessType = accessRegistry.getAccessByType(entry.getValue()).orElse(null);
-                if (accessType != null) {
-                    if (accessType.permissions().contains(permission)) {
-                        return true;
-                    }
-                }
-            }
-        }
-        final AccessList accessList = bolt.getStore().loadAccessList(protection.getOwner()).join();
-        if (accessList != null) {
-            for (final Map.Entry<String, String> entry : accessList.getAccess().entrySet()) {
-                if (sourceResolver.resolve(Source.parse(entry.getKey()))) {
-                    final Access accessType = accessRegistry.getAccessByType(entry.getValue()).orElse(null);
-                    if (accessType != null) {
-                        if (accessType.permissions().contains(permission)) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-        return sourceResolver.resolve(Source.of(SourceTypes.PERMISSION, "bolt.permission." + permission));
-    }
+
+
 
     public boolean isAllowedRedstoneAccess(final Protection protection, final Block block) {
         return canAccess(protection, REDSTONE_SOURCE_RESOLVER, Permission.REDSTONE) || (redstoneTracking && RedstoneTracker.allows(this, protection, block));

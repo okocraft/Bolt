@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class MemoryStore implements Store {
     private final Map<BlockLocation, BlockProtection> blockProtectionMap = new ConcurrentHashMap<>();
+    private final Map<UUID, BlockLocation> blockLocations = new ConcurrentHashMap<>();
     private final Map<UUID, EntityProtection> entityProtectionMap = new ConcurrentHashMap<>();
     private final Map<String, Group> groupMap = new ConcurrentHashMap<>();
     private final Map<UUID, AccessList> accessListMap = new ConcurrentHashMap<>();
@@ -33,14 +34,17 @@ public class MemoryStore implements Store {
 
     @Override
     public void saveBlockProtection(final BlockProtection protection) {
-        final BlockLocation blockLocation = new BlockLocation(protection.getWorld(), protection.getX(), protection.getY(), protection.getZ());
-        blockProtectionMap.put(blockLocation, protection);
+        final BlockLocation location = new BlockLocation(protection.getWorld(),protection.getX(),protection.getY(),protection.getZ());
+        final BlockLocation previous = blockLocations.put(protection.getId(),location);
+        if (previous != null && !previous.equals(location)) blockProtectionMap.remove(previous);
+        final BlockProtection replaced = blockProtectionMap.put(location,protection);
+        if (replaced != null && !replaced.getId().equals(protection.getId())) blockLocations.remove(replaced.getId());
     }
 
     @Override
     public void removeBlockProtection(BlockProtection protection) {
-        final BlockLocation blockLocation = new BlockLocation(protection.getWorld(), protection.getX(), protection.getY(), protection.getZ());
-        blockProtectionMap.remove(blockLocation);
+        final BlockLocation location=blockLocations.remove(protection.getId());
+        if (location != null) blockProtectionMap.remove(location);
     }
 
     @Override

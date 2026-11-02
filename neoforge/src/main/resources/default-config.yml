@@ -1,0 +1,197 @@
+version: 0
+language: ja
+settings:
+  use-action-bar: false
+protections:
+  private:
+    default: true
+    require-permission: false
+    allows: []
+  display:
+    require-permission: false
+    allows:
+    - interact
+    - open
+  deposit:
+    require-permission: false
+    allows:
+    - interact
+    - open
+    - deposit
+  withdrawal:
+    require-permission: false
+    allows:
+    - interact
+    - open
+    - withdraw
+  public:
+    require-permission: false
+    allows:
+    - interact
+    - open
+    - deposit
+    - withdraw
+    - mount
+access:
+  normal:
+    default: true
+    require-permission: false
+    allows:
+    - redstone
+    - interact
+    - open
+    - deposit
+    - withdraw
+    - mount
+    - auto_close
+  admin:
+    require-permission: false
+    allows:
+    - redstone
+    - interact
+    - open
+    - deposit
+    - withdraw
+    - mount
+    - auto_close
+    - edit
+sources:
+  player:
+    require-permission: false
+  group:
+    require-permission: true
+  password:
+    require-permission: false
+  permission:
+    require-permission: true
+  door:
+    require-permission: false
+  redstone:
+    require-permission: false
+  block:
+    require-permission: false
+  region:
+    require-permission: false
+blocks:
+  chest:
+    autoProtect: private
+  trapped_chest:
+    autoProtect: private
+  ender_chest:
+    autoProtect: public
+  furnace:
+    autoProtect: private
+  blast_furnace:
+    autoProtect: private
+  smoker:
+    autoProtect: private
+  dispenser:
+    autoProtect: private
+  dropper:
+    autoProtect: private
+  barrel:
+    autoProtect: private
+  brewing_stand:
+    autoProtect: private
+  composter:
+    autoProtect: private
+  beacon:
+    autoProtect: private
+  jukebox:
+    autoProtect: private
+  note_block:
+    autoProtect: private
+  lectern:
+    autoProtect: private
+  chiseled_bookshelf:
+    autoProtect: private
+  hopper:
+    autoProtect: private
+  '#shulker_boxes':
+    autoProtect: private
+  '#anvil':
+    autoProtect: private
+  '#cauldrons':
+    autoProtect: 'false'
+  '#standing_signs':
+    autoProtect: private
+  '#wall_signs':
+    autoProtect: private
+  '#all_hanging_signs':
+    autoProtect: 'false'
+  '#doors':
+    autoProtect: 'false'
+  '#trapdoors':
+    autoProtect: 'false'
+  '#fence_gates':
+    autoProtect: 'false'
+  '#buttons':
+    autoProtect: 'false'
+  '#pressure_plates':
+    autoProtect: 'false'
+  lever:
+    autoProtect: 'false'
+  '#banners':
+    autoProtect: 'false'
+  '#campfires':
+    autoProtect: 'false'
+  iron_door:
+    autoProtect: private
+  iron_trapdoor:
+    autoProtect: private
+  decorated_pot:
+    autoProtect: private
+  crafter:
+    autoProtect: private
+  '#copper_chests':
+    autoProtect: private
+  '#wooden_shelves':
+    autoProtect: private
+entities:
+  armor_stand:
+    autoProtect: private
+  item_frame:
+    autoProtect: private
+  glow_item_frame:
+    autoProtect: private
+  painting:
+    autoProtect: private
+  oak_chest_boat:
+    autoProtect: private
+  spruce_chest_boat:
+    autoProtect: private
+  birch_chest_boat:
+    autoProtect: private
+  jungle_chest_boat:
+    autoProtect: private
+  acacia_chest_boat:
+    autoProtect: private
+  dark_oak_chest_boat:
+    autoProtect: private
+  mangrove_chest_boat:
+    autoProtect: private
+  cherry_chest_boat:
+    autoProtect: private
+  poplar_chest_boat:
+    autoProtect: private
+  pale_oak_chest_boat:
+    autoProtect: private
+  bamboo_chest_raft:
+    autoProtect: private
+  chest_minecart:
+    autoProtect: private
+  furnace_minecart:
+    autoProtect: private
+  hopper_minecart:
+    autoProtect: private
+
+redstone:
+  deny-by-default: false
+database:
+  type: sqlite
+  hostname: ""
+  database: ""
+  username: ""
+  password: ""
+  prefix: ""
+  properties: {}

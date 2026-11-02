@@ -9,7 +9,6 @@ import org.popcraft.bolt.protection.EntityProtection;
 import org.popcraft.bolt.protection.PendingTransfer;
 import org.popcraft.bolt.util.BlockLocation;
 import org.popcraft.bolt.util.Group;
-import org.popcraft.bolt.util.Metrics;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
@@ -64,7 +63,7 @@ public class SQLStore implements Store {
             try {
                 Files.createDirectories(Path.of(".").resolve(configuration.path()).getParent());
             } catch (IOException e) {
-                e.printStackTrace();
+                throw new java.util.concurrent.CompletionException(e);
             }
         }
         final boolean usingMySQL = "mysql".equals(configuration.type());
@@ -83,7 +82,7 @@ public class SQLStore implements Store {
             createAccessTable.execute();
             createTransfersTable.execute();
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new java.util.concurrent.CompletionException(e);
         }
         if (!usingMySQL) {
             try (final PreparedStatement createBlocksOwnerIndex = connection.prepareStatement(Statements.CREATE_INDEX_BLOCK_OWNER.get(configuration.type()).formatted(configuration.prefix()));
@@ -95,10 +94,13 @@ public class SQLStore implements Store {
                 createEntitiesOwnerIndex.execute();
                 createGroupsOwnerIndex.execute();
             } catch (SQLException e) {
-                e.printStackTrace();
+                throw new java.util.concurrent.CompletionException(e);
             }
         }
-        executor.scheduleWithFixedDelay(this::flush, 30, 30, TimeUnit.SECONDS);
+        executor.scheduleWithFixedDelay(() -> flush().exceptionally(failure -> {
+            System.getLogger(SQLStore.class.getName()).log(System.Logger.Level.ERROR, "Bolt database flush failed; pending writes retained", failure);
+            return null;
+        }), 30, 30, TimeUnit.SECONDS);
         if (usingMySQL) {
             executor.scheduleWithFixedDelay(this::reconnect, 30, 30, TimeUnit.MINUTES);
         }
@@ -115,16 +117,17 @@ public class SQLStore implements Store {
             }
             connection = DriverManager.getConnection(connectionUrl, configuration.username(), configuration.password());
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new java.util.concurrent.CompletionException(e);
         }
     }
 
     public void close() {
-        this.executor.close();
-        try {
-            this.connection.close();
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
+        try { flush().join(); }
+        finally {
+            executor.shutdown();
+            try { executor.awaitTermination(30, TimeUnit.SECONDS); connection.close(); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new RuntimeException(e); }
+            catch (SQLException e) { throw new RuntimeException(e); }
         }
     }
 
@@ -141,10 +144,10 @@ public class SQLStore implements Store {
                 if (blockResultSet.next()) {
                     future.complete(blockProtectionFromResultSet(blockResultSet));
                 }
-            } catch (SQLException e) {
-                e.printStackTrace();
+            } catch (Exception e) {
+                future.completeExceptionally(e);
+                return;
             }
-            Metrics.recordProtectionAccess(false);
             future.complete(null);
         }, executor);
         return future;
@@ -167,8 +170,9 @@ public class SQLStore implements Store {
                 final double timeMillis = timeNanos / 1e6d;
                 LogManager.getLogManager().getLogger("").info(() -> "Loaded %d block protections in %.3f ms".formatted(count[0], timeMillis));
                 future.complete(protections);
-            } catch (SQLException e) {
-                e.printStackTrace();
+            } catch (Exception e) {
+                future.completeExceptionally(e);
+                return;
             }
             future.complete(Collections.emptyList());
         }, executor);
@@ -193,7 +197,8 @@ public class SQLStore implements Store {
 
     @Override
     public void saveBlockProtection(BlockProtection protection) {
-        CompletableFuture.runAsync(() -> saveBlocks.put(protection.getId(), protection), executor);
+        final var snapshot=RecordCopies.block(protection);
+        CompletableFuture.runAsync(() -> { removeBlocks.remove(snapshot.getId()); saveBlocks.put(snapshot.getId(),snapshot); },executor);
     }
 
     private void saveBlockProtectionNow(BlockProtection protection) {
@@ -211,17 +216,14 @@ public class SQLStore implements Store {
             replaceBlock.setString(11, protection.getBlock());
             replaceBlock.execute();
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new java.util.concurrent.CompletionException(e);
         }
     }
 
     @Override
     public void saveBlockProtections(Collection<BlockProtection> protections) {
-        final List<BlockProtection> copies = new ArrayList<>(protections.size());
-        for (final BlockProtection protection : protections) {
-            copies.add(new BlockProtection(protection.getId(), protection.getOwner(), protection.getType(), protection.getCreated(), protection.getAccessed(), new HashMap<>(protection.getAccess()), protection.getWorld(), protection.getX(), protection.getY(), protection.getZ(), protection.getBlock()));
-        }
-        CompletableFuture.runAsync(() -> copies.forEach(copy -> saveBlocks.put(copy.getId(), copy)), executor);
+        final var copies=protections.stream().map(RecordCopies::block).toList();
+        CompletableFuture.runAsync(() -> copies.forEach(copy -> { removeBlocks.remove(copy.getId()); saveBlocks.put(copy.getId(),copy); }),executor);
     }
 
     @Override
@@ -238,7 +240,7 @@ public class SQLStore implements Store {
             deleteBlock.setString(1, protection.getId().toString());
             deleteBlock.execute();
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new java.util.concurrent.CompletionException(e);
         }
     }
 
@@ -252,10 +254,10 @@ public class SQLStore implements Store {
                 if (entityResultSet.next()) {
                     future.complete(entityProtectionFromResultSet(entityResultSet));
                 }
-            } catch (SQLException e) {
-                e.printStackTrace();
+            } catch (Exception e) {
+                future.completeExceptionally(e);
+                return;
             }
-            Metrics.recordProtectionAccess(false);
             future.complete(null);
         }, executor);
         return future;
@@ -278,8 +280,9 @@ public class SQLStore implements Store {
                 final double timeMillis = timeNanos / 1e6d;
                 LogManager.getLogManager().getLogger("").info(() -> "Loaded %d entity protections in %.3f ms".formatted(count[0], timeMillis));
                 future.complete(protections);
-            } catch (SQLException e) {
-                e.printStackTrace();
+            } catch (Exception e) {
+                future.completeExceptionally(e);
+                return;
             }
             future.complete(Collections.emptyList());
         }, executor);
@@ -300,7 +303,8 @@ public class SQLStore implements Store {
 
     @Override
     public void saveEntityProtection(EntityProtection protection) {
-        CompletableFuture.runAsync(() -> saveEntities.put(protection.getId(), protection), executor);
+        final var snapshot=RecordCopies.entity(protection);
+        CompletableFuture.runAsync(() -> { removeEntities.remove(snapshot.getId()); saveEntities.put(snapshot.getId(),snapshot); },executor);
     }
 
     private void saveEntityProtectionNow(EntityProtection protection) {
@@ -314,7 +318,7 @@ public class SQLStore implements Store {
             replaceEntity.setString(7, protection.getEntity());
             replaceEntity.execute();
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new java.util.concurrent.CompletionException(e);
         }
     }
 
@@ -331,7 +335,7 @@ public class SQLStore implements Store {
             deleteEntity.setString(1, protection.getId().toString());
             deleteEntity.execute();
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new java.util.concurrent.CompletionException(e);
         }
     }
 
@@ -345,8 +349,9 @@ public class SQLStore implements Store {
                 if (groupResultSet.next()) {
                     future.complete(groupFromResultSet(groupResultSet));
                 }
-            } catch (SQLException e) {
-                e.printStackTrace();
+            } catch (Exception e) {
+                future.completeExceptionally(e);
+                return;
             }
             future.complete(null);
         }, executor);
@@ -364,8 +369,9 @@ public class SQLStore implements Store {
                     groups.add(groupFromResultSet(groupResultSet));
                 }
                 future.complete(groups);
-            } catch (SQLException e) {
-                e.printStackTrace();
+            } catch (Exception e) {
+                future.completeExceptionally(e);
+                return;
             }
             future.complete(Collections.emptyList());
         }, executor);
@@ -384,7 +390,8 @@ public class SQLStore implements Store {
 
     @Override
     public void saveGroup(Group group) {
-        CompletableFuture.runAsync(() -> saveGroups.put(group.getName(), group), executor);
+        final var snapshot=RecordCopies.group(group);
+        CompletableFuture.runAsync(() -> { removeGroups.remove(snapshot.getName()); saveGroups.put(snapshot.getName(),snapshot); },executor);
     }
 
     private void saveGroupNow(Group group) {
@@ -394,7 +401,7 @@ public class SQLStore implements Store {
             replaceGroup.setString(3, GSON.toJson(group.getMembers(), PLAYER_LIST_TYPE));
             replaceGroup.execute();
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new java.util.concurrent.CompletionException(e);
         }
     }
 
@@ -408,7 +415,7 @@ public class SQLStore implements Store {
             deleteGroup.setString(1, group.getName());
             deleteGroup.execute();
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new java.util.concurrent.CompletionException(e);
         }
     }
 
@@ -422,8 +429,9 @@ public class SQLStore implements Store {
                 if (accessListResultSet.next()) {
                     future.complete(accessListFromResultSet(accessListResultSet));
                 }
-            } catch (SQLException e) {
-                e.printStackTrace();
+            } catch (Exception e) {
+                future.completeExceptionally(e);
+                return;
             }
             future.complete(null);
         }, executor);
@@ -441,8 +449,9 @@ public class SQLStore implements Store {
                     accessLists.add(accessListFromResultSet(accessListsResultSet));
                 }
                 future.complete(accessLists);
-            } catch (SQLException e) {
-                e.printStackTrace();
+            } catch (Exception e) {
+                future.completeExceptionally(e);
+                return;
             }
             future.complete(Collections.emptyList());
         }, executor);
@@ -458,7 +467,8 @@ public class SQLStore implements Store {
 
     @Override
     public void saveAccessList(AccessList accessList) {
-        CompletableFuture.runAsync(() -> saveAccessLists.put(accessList.getOwner(), accessList), executor);
+        final var snapshot=RecordCopies.access(accessList);
+        CompletableFuture.runAsync(() -> { removeAccessLists.remove(snapshot.getOwner()); saveAccessLists.put(snapshot.getOwner(),snapshot); },executor);
     }
 
     private void saveAccessListNow(AccessList accessList) {
@@ -467,7 +477,7 @@ public class SQLStore implements Store {
             replaceAccessList.setString(2, GSON.toJson(accessList.getAccess(), ACCESS_LIST_TYPE));
             replaceAccessList.execute();
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new java.util.concurrent.CompletionException(e);
         }
     }
 
@@ -481,7 +491,7 @@ public class SQLStore implements Store {
             deleteAccessList.setString(1, accessList.getOwner().toString());
             deleteAccessList.execute();
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new java.util.concurrent.CompletionException(e);
         }
     }
 
@@ -496,8 +506,9 @@ public class SQLStore implements Store {
                     transfers.add(transferFromResultSet(transfersResultSet));
                 }
                 future.complete(transfers);
-            } catch (SQLException e) {
-                e.printStackTrace();
+            } catch (Exception e) {
+                future.completeExceptionally(e);
+                return;
             }
             future.complete(Collections.emptyList());
         }, executor);
@@ -528,7 +539,7 @@ public class SQLStore implements Store {
             replaceTransfer.setLong(4, transfer.created());
             replaceTransfer.execute();
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new java.util.concurrent.CompletionException(e);
         }
     }
 
@@ -545,7 +556,7 @@ public class SQLStore implements Store {
             deleteTransfer.setString(1, transfer.protection().toString());
             deleteTransfer.execute();
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new java.util.concurrent.CompletionException(e);
         }
     }
 
@@ -556,105 +567,31 @@ public class SQLStore implements Store {
 
     @Override
     public CompletableFuture<Void> flush() {
-        final CompletableFuture<Void> completionFuture = new CompletableFuture<>();
-        CompletableFuture.runAsync(() -> {
+        return CompletableFuture.runAsync(() -> {
             try {
-                if (!saveBlocks.isEmpty()) {
-                    connection.setAutoCommit(false);
-                    final Iterator<BlockProtection> saveBlocksIterator = saveBlocks.values().iterator();
-                    while (saveBlocksIterator.hasNext()) {
-                        saveBlockProtectionNow(saveBlocksIterator.next());
-                        saveBlocksIterator.remove();
-                    }
-                    connection.setAutoCommit(true);
-                }
-                if (!removeBlocks.isEmpty()) {
-                    connection.setAutoCommit(false);
-                    final Iterator<BlockProtection> removeBlocksIterator = removeBlocks.values().iterator();
-                    while (removeBlocksIterator.hasNext()) {
-                        removeBlockProtectionNow(removeBlocksIterator.next());
-                        removeBlocksIterator.remove();
-                    }
-                    connection.setAutoCommit(true);
-                }
-                if (!saveEntities.isEmpty()) {
-                    connection.setAutoCommit(false);
-                    final Iterator<EntityProtection> saveEntitiesIterator = saveEntities.values().iterator();
-                    while (saveEntitiesIterator.hasNext()) {
-                        saveEntityProtectionNow(saveEntitiesIterator.next());
-                        saveEntitiesIterator.remove();
-                    }
-                    connection.setAutoCommit(true);
-                }
-                if (!removeEntities.isEmpty()) {
-                    connection.setAutoCommit(false);
-                    final Iterator<EntityProtection> removeEntitiesIterator = removeEntities.values().iterator();
-                    while (removeEntitiesIterator.hasNext()) {
-                        removeEntityProtectionNow(removeEntitiesIterator.next());
-                        removeEntitiesIterator.remove();
-                    }
-                    connection.setAutoCommit(true);
-                }
-                if (!saveGroups.isEmpty()) {
-                    connection.setAutoCommit(false);
-                    final Iterator<Group> saveGroupsIterator = saveGroups.values().iterator();
-                    while (saveGroupsIterator.hasNext()) {
-                        saveGroupNow(saveGroupsIterator.next());
-                        saveGroupsIterator.remove();
-                    }
-                    connection.setAutoCommit(true);
-                }
-                if (!removeGroups.isEmpty()) {
-                    connection.setAutoCommit(false);
-                    final Iterator<Group> removeGroupsIterator = removeGroups.values().iterator();
-                    while (removeGroupsIterator.hasNext()) {
-                        removeGroupNow(removeGroupsIterator.next());
-                        removeGroupsIterator.remove();
-                    }
-                    connection.setAutoCommit(true);
-                }
-                if (!saveAccessLists.isEmpty()) {
-                    connection.setAutoCommit(false);
-                    final Iterator<AccessList> saveAccessListsIterator = saveAccessLists.values().iterator();
-                    while (saveAccessListsIterator.hasNext()) {
-                        saveAccessListNow(saveAccessListsIterator.next());
-                        saveAccessListsIterator.remove();
-                    }
-                    connection.setAutoCommit(true);
-                }
-                if (!removeAccessLists.isEmpty()) {
-                    connection.setAutoCommit(false);
-                    final Iterator<AccessList> removeAccessListsIterator = removeAccessLists.values().iterator();
-                    while (removeAccessListsIterator.hasNext()) {
-                        removeAccessListNow(removeAccessListsIterator.next());
-                        removeAccessListsIterator.remove();
-                    }
-                    connection.setAutoCommit(true);
-                }
-                if (!saveTransfers.isEmpty()) {
-                    connection.setAutoCommit(false);
-                    final Iterator<PendingTransfer> saveTransfersIterator = saveTransfers.values().iterator();
-                    while (saveTransfersIterator.hasNext()) {
-                        saveTransferNow(saveTransfersIterator.next());
-                        saveTransfersIterator.remove();
-                    }
-                    connection.setAutoCommit(true);
-                }
-                if (!removeTransfers.isEmpty()) {
-                    connection.setAutoCommit(false);
-                    final Iterator<PendingTransfer> removeTransfersIterator = removeTransfers.values().iterator();
-                    while (removeTransfersIterator.hasNext()) {
-                        removeTransferNow(removeTransfersIterator.next());
-                        removeTransfersIterator.remove();
-                    }
-                    connection.setAutoCommit(true);
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
+                if (connection == null || connection.isClosed()) reconnect();
+                connection.setAutoCommit(false);
+                saveBlocks.values().forEach(this::saveBlockProtectionNow);
+                removeBlocks.values().forEach(this::removeBlockProtectionNow);
+                saveEntities.values().forEach(this::saveEntityProtectionNow);
+                removeEntities.values().forEach(this::removeEntityProtectionNow);
+                saveGroups.values().forEach(this::saveGroupNow);
+                removeGroups.values().forEach(this::removeGroupNow);
+                saveAccessLists.values().forEach(this::saveAccessListNow);
+                removeAccessLists.values().forEach(this::removeAccessListNow);
+                saveTransfers.values().forEach(this::saveTransferNow);
+                removeTransfers.values().forEach(this::removeTransferNow);
+                connection.commit();
+                saveBlocks.clear(); removeBlocks.clear(); saveEntities.clear(); removeEntities.clear();
+                saveGroups.clear(); removeGroups.clear(); saveAccessLists.clear(); removeAccessLists.clear();
+                saveTransfers.clear(); removeTransfers.clear();
+            } catch (Exception failure) {
+                try { if (connection != null) connection.rollback(); } catch (SQLException rollback) { failure.addSuppressed(rollback); }
+                throw new java.util.concurrent.CompletionException(failure);
             } finally {
-                completionFuture.complete(null);
+                try { if (connection != null && !connection.isClosed()) connection.setAutoCommit(true); }
+                catch (SQLException failure) { throw new java.util.concurrent.CompletionException(failure); }
             }
         }, executor);
-        return completionFuture;
     }
 }
