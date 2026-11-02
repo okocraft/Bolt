@@ -1,0 +1,17 @@
+modLoader="javafml"
+loaderVersion="[11,)"
+license="GPL-3.0-only"
+[[mods]]
+modId="bolt_test"
+version="1.0"
+displayName="Bolt behavioral fixtures"
+[[dependencies.bolt_test]]
+modId="bolt"
+type="required"
+versionRange="*"
+side="SERVER"
+[[dependencies.bolt_test]]
+modId="worldguard"
+type="required"
+versionRange="*"
+side="SERVER"

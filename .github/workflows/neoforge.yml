@@ -1,0 +1,56 @@
+name: NeoForge
+on:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: bolt-neoforge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: Bolt
+      - uses: actions/checkout@v4
+        with:
+          repository: okocraft/WorldGuard-NeoForge
+          ref: b8f074f1dc64adb2832498aca71a8062e331bbc1
+          path: WorldGuard-NeoForge
+      - uses: actions/checkout@v4
+        with:
+          repository: okocraft/CoreProtectNeo
+          ref: e6ccdd4404e4e1ddd300995ef9679463cbf31382
+          path: CoreProtectNeo
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build installed WorldGuard and CoreProtect dependencies
+        run: |
+          chmod +x WorldGuard-NeoForge/gradlew CoreProtectNeo/gradlew Bolt/gradlew
+          cd WorldGuard-NeoForge
+          ./gradlew jar --no-daemon --console=plain
+          cd ../CoreProtectNeo
+          ./gradlew jar --no-daemon --console=plain
+      - name: Build Bolt and test permission and storage contracts
+        working-directory: Bolt
+        run: ./gradlew :bolt-neoforge:build :bolt-common:test --no-daemon --console=plain
+      - name: Test real DQM containers, protection, commands and restart
+        working-directory: Bolt
+        timeout-minutes: 15
+        env:
+          BOLT_TEST_HEAP: 3G
+        run: node neoforge/src/test/node/server-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Bolt-NeoForge
+          path: |
+            Bolt/neoforge/build/libs/*.jar
+            Bolt/common/build/test-results/test/
+            Bolt/neoforge/build/smoke/server-output*.log

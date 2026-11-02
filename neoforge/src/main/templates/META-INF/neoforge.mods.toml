@@ -1,0 +1,31 @@
+modLoader="javafml"
+loaderVersion="[11,)"
+license="GPL-3.0-only"
+[[mods]]
+modId="bolt"
+version="${version}"
+displayName="Bolt"
+authors="pop4959, rymiel, OKOCRAFT"
+description="Block and entity protection for NeoForge."
+[[mixins]]
+config="bolt.mixins.json"
+[[mixins]]
+config="bolt.integration.mixins.json"
+[[mixins]]
+config="bolt.dqm.mixins.json"
+[[dependencies.bolt]]
+modId="neoforge"
+type="required"
+versionRange="[26.2.0.88,26.3)"
+side="SERVER"
+[[dependencies.bolt]]
+modId="minecraft"
+type="required"
+versionRange="[26.2,26.3)"
+side="SERVER"
+[[dependencies.bolt]]
+modId="worldguard"
+type="optional"
+versionRange="[7.0.19,)"
+ordering="AFTER"
+side="SERVER"

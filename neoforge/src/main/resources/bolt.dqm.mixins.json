@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "org.popcraft.bolt.neoforge.compat.dqm.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": ["DqmBuildMaterialChestMenuMixin", "DqmLargeBagMenuMixin"],
+  "injectors": {"defaultRequire": 1}
+}
