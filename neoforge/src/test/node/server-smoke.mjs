@@ -62,6 +62,7 @@ async function boot(restart,label=""){
     const file=createWriteStream(join(work,'server-output'+label+(restart?'-restart':'')+'.log'));
     let initialized=false,ready=false,passed=false,failed=false,stopped=false;
     const markers=new Set(restart?['BOLT_RESTART_TESTS_PASSED']:['BOLT_PROTECTION_TESTS_PASSED','BOLT_COMMAND_TESTS_PASSED','BOLT_INTEGRATION_TESTS_PASSED']);
+    if (!restart && label !== '-vanilla') markers.add('BOLT_DQM_CONTAINER_TESTS_PASSED');
     const timeout=setTimeout(()=>child.kill(),300000);
     for(const stream of [child.stdout,child.stderr])createInterface({input:stream}).on('line',line=>{
         file.write(line+'\n');console.log(line);
@@ -73,7 +74,7 @@ async function boot(restart,label=""){
     try{const [code]=await once(child,'close');assert(initialized&&ready,'Packaged Bolt did not initialize');assert(passed&&!failed,'Bolt fixture failed');assert.equal(markers.size,0,'Missing fixture completion '+[...markers]);assert.equal(code,0,'Server failed to stop normally');}
     finally{clearTimeout(timeout);if(child.exitCode===null&&child.signalCode===null)child.kill();file.end();}
 }
-await boot(false,'-vanilla');
+if (!process.argv.includes('--dqm-only')) await boot(false,'-vanilla');
 for(const relative of ['world','config/bolt'])await rm(resolve(actualServer,relative),{recursive:true,force:true});
 await Promise.all(assets.map(asset=>obtain(join(workspace,'.tools/multimc-setup/mods',asset.name),join(mods,asset.name),asset.url,asset.sha256)));
 await boot(false);

@@ -21,6 +21,8 @@ Keep sibling checkouts WorldGuard-NeoForge and CoreProtectNeo alongside this rep
     ./gradlew :bolt-neoforge:build :bolt-common:test
     node neoforge/src/test/node/server-smoke.mjs
 
+For a local DQM-only retry after an unchanged native baseline passed, append --dqm-only. CI runs the full sequence.
+
 The standalone server fixture binds only loopback25586, uses fresh data under neoforge/build/smoke, and runs real DQM1.06.25 with its matching voice assets, WorldGuard, WorldEdit, CoreProtect and LuckPerms. External jars come from ordinary official file URLs; DQM files are checked against the author's SHA-256. DQM code and assets are not included in this repository or release artifacts.
 
 Unit tests cover permission unions, ownership, cache movement and SQLite restart/retry behavior. Dedicated tests exercise player actions, inventory permissions, hopper movement, DQM menus/tools, WorldGuard and beacon behavior, commands and server restart. The server fixture first runs without DQM as a native positive control, then runs the actual DQM pack and restarts it to verify stored locks. It also checks command permission changes and cancellation after a region is removed. A no-effect unprotected DQM control is a failed/inconclusive fixture, never evidence of protection.
